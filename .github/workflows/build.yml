@@ -76,7 +76,7 @@ jobs:
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
-      - name: Generate Keystore for Release Build
+      - name: Generate Temporary Keystore for Gradle
         run: |
           keytool -genkeypair -v \
             -keystore release.keystore \
@@ -122,12 +122,20 @@ jobs:
           RELEASE_KEY_PASSWORD: password123
         run: ./gradlew assembleRelease
 
-      - name: Collect Release APKs
+      - name: Download Uber APK Signer
         run: |
-          mkdir -p release_apks
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release_apks/ \;
-          echo "Collected files:"
-          ls -lh release_apks/
+          wget -q https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
+
+      - name: Re-sign with Fixed Universal Certificate
+        run: |
+          mkdir -p signed_apks
+          RAW_APK=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
+          java -jar uber-apk-signer-1.3.0.jar \
+            --apks "$RAW_APK" \
+            --allowResign \
+            --out signed_apks
+          echo "Signed files:"
+          ls -lh signed_apks/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -136,6 +144,6 @@ jobs:
           name: LastWave ${{ needs.check.outputs.tag }} (Yandex Music Package)
           draft: false
           prerelease: false
-          files: release_apks/*.apk
+          files: signed_apks/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
