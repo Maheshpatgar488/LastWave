@@ -2,10 +2,9 @@ name: Auto Build Renamed LastWave
 
 on:
   schedule:
-    # Runs every 30 minutes
-    - cron: '*/30 * * * *'
+    # Runs automatically every 2 hours
+    - cron: '15 */2 * * *'
   workflow_dispatch:
-
     inputs:
       force_build:
         description: 'Force build even if version is up to date'
@@ -77,7 +76,52 @@ jobs:
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
+      - name: Generate Keystore for Release Build
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias release_key \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass password123 \
+            -keypass password123 \
+            -dname "CN=LastWave, OU=App, O=LastWave, L=City, S=State, C=US"
+          
+          mkdir -p app/app
+          cp release.keystore app/release.keystore
+          cp release.keystore app/app/release.keystore
+          
+          # Base64 export for LastWave's CI signing check
+          SIGNING_KEY_B64=$(base64 -w 0 release.keystore)
+          echo "SIGNING_KEY=$SIGNING_KEY_B64" >> $GITHUB_ENV
+          echo "KEY_STORE_PASSWORD=password123" >> $GITHUB_ENV
+          echo "ALIAS=release_key" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=password123" >> $GITHUB_ENV
+          
+          # Local build properties fallback
+          echo "RELEASE_STORE_FILE=app/release.keystore" >> $GITHUB_ENV
+          echo "RELEASE_STORE_PASSWORD=password123" >> $GITHUB_ENV
+          echo "RELEASE_KEY_ALIAS=release_key" >> $GITHUB_ENV
+          echo "RELEASE_KEY_PASSWORD=password123" >> $GITHUB_ENV
+          
+          for f in local.properties gradle.properties .env app/local.properties; do
+            echo "RELEASE_STORE_FILE=app/release.keystore" >> "$f"
+            echo "RELEASE_STORE_PASSWORD=password123" >> "$f"
+            echo "RELEASE_KEY_ALIAS=release_key" >> "$f"
+            echo "RELEASE_KEY_PASSWORD=password123" >> "$f"
+          done
+
       - name: Build Production Release APK
+        env:
+          SIGNING_KEY: ${{ env.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: password123
+          ALIAS: release_key
+          KEY_PASSWORD: password123
+          RELEASE_STORE_FILE: app/release.keystore
+          RELEASE_STORE_PASSWORD: password123
+          RELEASE_KEY_ALIAS: release_key
+          RELEASE_KEY_PASSWORD: password123
         run: ./gradlew assembleRelease
 
       - name: Download Uber APK Signer
