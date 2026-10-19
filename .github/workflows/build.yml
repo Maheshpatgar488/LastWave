@@ -92,14 +92,12 @@ jobs:
           cp release.keystore app/release.keystore
           cp release.keystore app/app/release.keystore
           
-          # Base64 export for LastWave's CI signing check
           SIGNING_KEY_B64=$(base64 -w 0 release.keystore)
           echo "SIGNING_KEY=$SIGNING_KEY_B64" >> $GITHUB_ENV
           echo "KEY_STORE_PASSWORD=password123" >> $GITHUB_ENV
           echo "ALIAS=release_key" >> $GITHUB_ENV
           echo "KEY_PASSWORD=password123" >> $GITHUB_ENV
           
-          # Local build properties fallback
           echo "RELEASE_STORE_FILE=app/release.keystore" >> $GITHUB_ENV
           echo "RELEASE_STORE_PASSWORD=password123" >> $GITHUB_ENV
           echo "RELEASE_KEY_ALIAS=release_key" >> $GITHUB_ENV
@@ -124,19 +122,12 @@ jobs:
           RELEASE_KEY_PASSWORD: password123
         run: ./gradlew assembleRelease
 
-      - name: Download Uber APK Signer
+      - name: Collect Release APKs
         run: |
-          wget -q https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
-
-      - name: Sign APK
-        run: |
-          mkdir -p unsigned_apks signed_apks
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} unsigned_apks/ \;
-          java -jar uber-apk-signer-1.3.0.jar \
-            --apks unsigned_apks \
-            --out signed_apks \
-            --allowResign \
-            --overwrite
+          mkdir -p release_apks
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release_apks/ \;
+          echo "Collected files:"
+          ls -lh release_apks/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -145,6 +136,6 @@ jobs:
           name: LastWave ${{ needs.check.outputs.tag }} (Yandex Music Package)
           draft: false
           prerelease: false
-          files: signed_apks/*-aligned-debugSigned.apk
+          files: release_apks/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
